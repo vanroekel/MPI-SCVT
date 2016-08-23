@@ -1,10 +1,10 @@
 CC = mpic++
-BDIR = /opt/local/boost_1_48_0-gcc
-NCDFDIR = /opt/local/netcdf-4.1.3-gcc
+BDIR = /usr/projects/climate/SHARED_CLIMATE/software/mustang/boost/1.57.0/gcc-4.8.2/openmpi-1.6.5
+NCDFDIR = /usr/projects/climate/SHARED_CLIMATE/software/mustang/netcdf/4.4.0/gcc-4.8.2
 LIBS = -I${BDIR}/include/ -L${BDIR}/lib/ -lboost_mpi -lboost_serialization
 
 ifeq ($(NETCDF),yes)
-NCDFDIR = /opt/local/netcdf-4.1.3-gcc
+NCDFDIR = $NETCDF 
 LIBS += -I$(NCDFDIR)/include/ -L$(NCDFDIR)/lib/ -lnetcdf -lnetcdf_c++
 NCDF_FLAGS = -DUSE_NETCDF
 endif

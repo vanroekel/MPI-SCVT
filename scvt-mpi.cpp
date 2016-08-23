@@ -365,6 +365,7 @@ int main(int argc, char **argv){
 	// Each processor needs to setup the quadrature rules.
 	init_quadrature();
 
+
 	// Broadcast parameters, regions, and initial point set to each processor.
 	mpi::broadcast(world,num_pts,master);
 	mpi::broadcast(world,max_it,master);
@@ -379,9 +380,9 @@ int main(int argc, char **argv){
 	mpi::broadcast(world,quad_rule,master);
 	mpi::broadcast(world,regions,master);
 	mpi::broadcast(world,points,master);
-	mpi::broadcast(world,boundary_points,master);
+//	mpi::broadcast(world,boundary_points,master);
 
-	//printRegions();
+//	printRegions();
 
 	// Setup timers
 	for(i = 0; i < num_timers; i++){
@@ -586,17 +587,17 @@ int main(int argc, char **argv){
 	if(id == master){
 		ofstream end_pts("end_points.dat");
 		ofstream pt_dens("point_density.dat");
-		ofstream bdry_pts("boundary_points.dat");
+//		ofstream bdry_pts("boundary_points.dat");
 		for(point_itr = points.begin(); point_itr != points.end(); ++point_itr){
 			end_pts << (*point_itr) << endl;
 			pt_dens << density((*point_itr)) << endl;
 		}
-		for(boundary_itr = boundary_points.begin(); boundary_itr != boundary_points.end(); boundary_itr++){
-			bdry_pts << (*boundary_itr) << endl;
-		}
+//		for(boundary_itr = boundary_points.begin(); boundary_itr != boundary_points.end(); boundary_itr++){
+//			bdry_pts << (*boundary_itr) << endl;
+//		}
 		end_pts.close();
 		pt_dens.close();
-		bdry_pts.close();
+//		bdry_pts.close();
 	}
 
 	//Bisect all edges of all triangles to give an extra point set at the end, bisected_points.dat
@@ -2936,7 +2937,106 @@ int writeRestartFileRetainTXT( const int it ) {/*{{{*/
 
 double density(const pnt &p){/*{{{*/
 	//density returns the value of the density function at point p
-	return 1.0; // Uniform density
+       double r, latp, lonp;
+       double H1, H2, H3, H4, R1, R2, R3, R4;
+       double width1, width2, width3, width4, Y1, Y2, Y3, Y4;
+       double max1, max2, max3, max4, min1, min2, min3, min4;
+       double norm,d1,d2,d3,d4;
+       double lon_cent1, lon_cent2, lon_cent3, lon_cent4;
+       double lat_cent1, lat_cent2, lat_cent3, lat_cent4;
+       pnt cnt, cnt2;
+
+//  cent = pnt(0.0, -0.866025403784439, 0.5);
+//  cent.normalize();
+
+        R1 = 0.174533;
+        H1 = 5.*R1;
+	max1 = 1.0;
+	min1 = 1.0/64.0;
+	lat_cent1 = -M_PI / 3.0;
+	width1 = H1 / (atanh(1. - 2e-3 / (max1 - min1)) - atanh(2e-3 / (max1 - min1) - 1));
+        Y1 = R1 + width1 * atanh(1. - 2e-3 / (max1 - min1));
+
+	R2 = 0.313571 / 2.0;
+	H2 = 2.5*R2;
+	max2 = 81.0;
+	min2 = 1.0;
+	lon_cent2 = 0.0;
+	lat_cent2 = -M_PI / 3.0;
+	width2 = H2 / (atanh(1.0 - 2.5 / (max2 - min2)) - atanh(2.5 / (max2 - min2) - 1));
+        Y2 = R2 + width2 * atanh(1. - 2.5 / (max2 - min2));
+
+	R3 = M_PI / 180.0;
+	H3 = 5.0* R3;
+	max3 = 10000.;
+	min3 = 1.0;
+	lat_cent3 = -56.0*M_PI/180.0;
+	lon_cent3 = 0.0;	
+	width3 = H3 / (atanh(1. - 2.5 / (max3 - min3)) - atanh(2.5 / (max3 - min3)  - 1));
+        Y3 = R3 + width3 * atanh(1. - 2.5 / (max3 - min3));
+
+// Add another lon band for efficiency
+//
+	R4 = M_PI / 2.;
+	H4 = 5.*R4;
+	max4 = 16.;
+	min4 = 1.;
+	lon_cent4 = 0.0;
+	width4 = H4 / (atanh(1. - 2.5 / (max4 - min4)) - atanh(2.5 / (max4 - min4)  - 1));
+	Y4 = R4 + width4*atanh(1. - 2.5 / (max4 - min4));
+
+        latp=p.getLat();
+        lonp=p.getLon();
+	if(lonp > M_PI) lonp -= 2.0*M_PI;
+
+	cnt = pntFromLatLon(latp,0.0);
+	cnt2 = pntFromLatLon(lat_cent1,0.0);
+
+	r=cnt2.dotForAngle(cnt);
+
+// Latitude band	
+        d1 = (max1 - min1) / 2.0 * (tanh((Y1 - r) / width1) + 1.0) + min1;
+
+// Longitude band
+
+	latp = p.getLat();
+	lonp = p.getLon();
+        if(lonp > M_PI) lonp -= 2.0*M_PI;
+
+	cnt = pntFromLatLon(0.0, lonp);
+	cnt2 = pntFromLatLon(0.0, lon_cent4);
+
+	d4 = (max4 - min4) / 2.0 * (tanh((Y4 - r) / width4) + 1.) + min4;
+
+// longitude circle
+
+	cnt = pntFromLatLon(latp,lonp);
+	cnt2 = pntFromLatLon(lat_cent2, lon_cent2);
+
+	r = cnt2.dotForAngle(cnt);
+	d2 = (max2 - min2) / 2.0 * (tanh((Y2 - r) / width2) + 1.0) + min2;
+
+// Small patch
+//
+	cnt2 = pntFromLatLon(lat_cent3, lon_cent3);
+	r = cnt2.dotForAngle(cnt);
+	d3 = (max3 - min3) / 2.0 * (tanh((Y3 - r) / width3) + 1.0) + min3;
+
+//        density1 = min(d1,d2)*min_val2/min_val1;
+        return d1*d2*d3*d4;
+
+// Next do the high resolution patch
+//
+
+//	width = 30000.0 / (0.8*0.5/40.0)*pow(0.5+min_val2,-1.25);
+//	trans_cent = 3.0*width + 200000.0;
+//	norm = 1.0/(1.0-min_val2);
+//	lat1 = -60.0*M_PI/180.0;
+//	cnt = pntFromLatLon(lat1,lon1);
+//       r = cnt.dotForAngle(p);
+//	density2 = ((tanh((trans_cent - r)*(1.0/width)) + 1.0)/2.0)/norm + min_val2;
+//       return max(density2,density1);
+
 
 	/* Density function for Shallow Water Test Case 5 
 	pnt cent;
@@ -2968,11 +3068,11 @@ double density(const pnt &p){/*{{{*/
 	// */
     
     // /* Pop low resolution density function.
-    return pop_lowres_density(p);
+//    return pop_lowres_density(p);
     // */
     
     // /* Pop high resolution density function. 
-    return pop_highres_density(p);
+//    return pop_highres_density(p);
     // */
 
 }/*}}}*/
